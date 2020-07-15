@@ -29,9 +29,9 @@ namespace PMLogger
 
 
             DataStreamExample dse = new DataStreamExample();
-            dse.AddStreams("met");
+            dse.AddStreams("com");
             dse.OnSubscribed += SubscribedOK;
-            dse.OnPerfDataReceived += OnPMDataReceived;
+            dse.OnMentalDataReceived += OnPMDataReceived;
 
             // Need a valid license key and activeSession when subscribe performance metric data
             dse.Start(licenseID, true);

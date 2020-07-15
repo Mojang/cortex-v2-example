@@ -44,6 +44,7 @@ namespace CortexAccess
         //public event EventHandler<ArrayList> OnDevDataReceived; // contact quality data
         public event EventHandler<ArrayList> OnPerfDataReceived; // performance metric
         public event EventHandler<ArrayList> OnBandPowerDataReceived; // band power
+        public event EventHandler<ArrayList> OnMentalDataReceived; // band power
         public event EventHandler<Dictionary<string, JArray>> OnSubscribed;
 
         // Constructor
@@ -172,6 +173,10 @@ namespace CortexAccess
             else if (e.StreamName == "pow")
             {
                 OnBandPowerDataReceived(this, data);
+            }
+            else if (e.StreamName == "com")
+            {
+                OnMentalDataReceived(this, data);
             }
         }
         private void MessageErrorRecieved(object sender, ErrorMsgEventArgs e)
