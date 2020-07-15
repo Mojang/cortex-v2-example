@@ -2,6 +2,7 @@
 using System.Threading;
 using WebSocket4Net;
 using Newtonsoft.Json.Linq;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace CortexAccess
@@ -176,7 +177,7 @@ namespace CortexAccess
             m_MessageReceiveEvent.Set();
             //Console.WriteLine("Received: " + e.Message);
 
-            JObject response = JObject.Parse(e.Message);
+            JObject response = JObject.Parse(m_CurrentMessage);
 
             if (response["id"] != null)
             {
@@ -213,6 +214,15 @@ namespace CortexAccess
                     if (property.Name != "sid" &&
                         property.Name != "time")
                     {
+                        JArray xTup = (JArray) property.Value;
+                        String metric = property.Name;
+                        ArrayList data = xTup.ToObject<ArrayList>();
+                        String command = data[0].ToString();
+                        double strength = (double)data[1];
+
+                        Console.WriteLine("Command: " + command + " Strength: " + strength.ToString());
+                        //TODO: Create Minecraft Client and pass this input to it.
+
                         OnStreamDataReceived(this, new StreamDataEventArgs(sid, (JArray)property.Value, time, property.Name));
                     }
                 }
