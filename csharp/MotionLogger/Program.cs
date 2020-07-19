@@ -13,6 +13,9 @@ namespace MotionLogger
     {
         const string OutFilePath = @"MotionLogger.csv";
         const string licenseID = ""; // Do not need license id when subscribe motion
+        const int maxGyroDPS = 500; // Max_Gyro = 500 dps
+        const int maxAcc = 4; // Max_Acc  =  4 g
+        const int maxMag = 4; // Max_Mag  = 4 gauss
         const int noiseThreshold = 20;
         const int baselineThreshold = 1000;
 
@@ -26,13 +29,22 @@ namespace MotionLogger
         private static FileStream OutFileStream;
 
         // Reference: https://emotiv.gitbook.io/epoc-user-manual/introduction-1/technical_specifications
-        enum GyrometerType
+        public enum GyrometerType
         {
             G, // +- 8g: Epoc v1.0. Uses GYROX, GYROY.
             DPS, // +- 500 d/s: Epoc+ v1.1. Uses GYROX, GYROY, GYROZ.
             Quaternion, // 4D Quaternions: Epoc X, Epoc+ v1.1A. Uses Q0, Q1, Q2, Q3.
             Unknown, // Default case of unknown Gyrometer
         }
+        public struct Quaternion
+        {
+            public double w, x, y, z;
+        };
+
+        public struct EulerAngles
+        {
+            public double roll, pitch, yaw;
+        };
 
         static void Main(string[] args)
         {
@@ -137,9 +149,59 @@ namespace MotionLogger
             
         }
 
+        // Convert G to a digestible form (Untested, provided by Emotiv)
+        // Acc (g)    = (X * 4 * Max_Acc *2 ) / 2^16 - Max_Acc
+        private static float ConvertG(float g)
+        {
+            return (g * 4 * maxAcc * 2) / (float)Math.Pow(2, 16) - maxAcc;
+        }
+
+        // Convert Degrees Per Second from ADC scaled to a digestible form (physical DPS)
+        // Gyro (dps) = (X * 4 * Max_Gyro *2 ) / 2^16 - Max_Gyro
         private static float ConvertDegreesPerSecond(float dps)
         {
-            return 0.0f;
+            return (dps * 4 * maxGyroDPS * 2) / (float)Math.Pow(2, 16) - maxGyroDPS;
+        }
+
+        // Convert Quaternion to Euler Angles (Untested, provided by Emotiv)
+        // Reference: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+        private static EulerAngles ConvertQuaternions(Quaternion q)
+        {
+            // roll (x-axis rotation) variables
+            double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+            double cosr_cosp = 1 - 2 * (Math.Pow(q.x, 2) + Math.Pow(q.y, 2));
+
+            // pitch (y-axis rotation)
+            double sinp = 2 * (q.w * q.y - q.z * q.x);
+
+            // yaw (z-axis rotation)
+            double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+            double cosy_cosp = 1 - 2 * (Math.Pow(q.y, 2) + Math.Pow(q.z, 2));
+
+            return new EulerAngles
+            {
+                roll = Math.Atan2(sinr_cosp, cosr_cosp),
+                pitch = Math.Abs(sinp) >= 1 ? CopySign(Math.PI / 2, sinp) : Math.Asin(sinp),
+                yaw = Math.Atan2(siny_cosp, cosy_cosp)
+            }
+            ;
+        }
+
+        // Convert gauss to a digestible form (Untested, provided by Emotiv)
+        // Mag(gauss)  = (X * 4 * Max_Mag *2 ) / 2^16 - Max_Mag
+        private static float ConvertGauss(float gauss)
+        {
+            return (gauss * 4 * maxMag * 2) / (float) Math.Pow(2, 16) - maxMag;
+        }
+
+        // CopySign does not exist in System v4's Math, so we manually define it here.
+        // Returns: a value with a magnitude of x and the sign of y.
+        // I.E. copysign ( 10.0,-1.0) = -10.0, copysign (-10.0,-1.0) = -10.0, copysign (-10.0, 1.0) = 10.0
+        private static double CopySign(double x, double y)
+        {
+            bool isNegative = Math.Sign(y) == -1; // Math.sign returns -1 if < 0, 0 if == 0, 1 if > 0
+            int toMultiplyBy = isNegative ? -1 : 1;
+            return Math.Abs(x) * toMultiplyBy;
         }
     }
 }
