@@ -20,7 +20,7 @@ namespace MotionLogger
         const int baselineThreshold = 1000;
 
         private static GyrometerType currentGyroType = GyrometerType.Unknown;
-        private static float rollingSum = 0;
+        private static RollingSums rollingSums;
         private static int gyroXIndex = -1;
         private static int gyroYIndex = -1;
         private static int gyroZIndex = -1;
@@ -35,6 +35,11 @@ namespace MotionLogger
             DPS, // +- 500 d/s: Epoc+ v1.1. Uses GYROX, GYROY, GYROZ.
             Quaternion, // 4D Quaternions: Epoc X, Epoc+ v1.1A. Uses Q0, Q1, Q2, Q3.
             Unknown, // Default case of unknown Gyrometer
+        }
+
+        public struct RollingSums
+        {
+            public double x, y, z;
         }
         public struct Quaternion
         {
@@ -57,8 +62,13 @@ namespace MotionLogger
                 File.Delete(OutFilePath);
             }
             OutFileStream = new FileStream(OutFilePath, FileMode.Append, FileAccess.Write);
-            rollingSum = 0;
-
+            rollingSums = rollingSums = new RollingSums
+            {
+                x = 0,
+                y = 0,
+                z = 0
+            };
+            currentGyroType = GyrometerType.Unknown;
 
             DataStreamExample dse = new DataStreamExample();
             dse.AddStreams("mot");
@@ -91,6 +101,10 @@ namespace MotionLogger
 
                     //add timeStamp to header
                     header.Insert(0, "Timestamp");
+                    header.Add("Action1");
+                    header.Add("Action2");
+                    header.Add("Action3");
+                    header.Add("Action4");
                     WriteDataToFile(header);
 
                     // Determine what type of gyrometer we have available
@@ -145,8 +159,64 @@ namespace MotionLogger
 
         private static void OnMotionDataReceived(object sender, ArrayList motData)
         {
-            WriteDataToFile(motData);
             
+            switch (currentGyroType)
+            {
+                case GyrometerType.DPS:
+                    float rawGyroX = (float) motData[gyroXIndex];
+                    float rawGyroY = (float) motData[gyroYIndex];
+                    float rawGyroZ = (float) motData[gyroZIndex];
+
+                    float convertedX = ConvertDegreesPerSecond(rawGyroX);
+                    float convertedY = ConvertDegreesPerSecond(rawGyroY);
+                    float convertedZ = ConvertDegreesPerSecond(rawGyroZ);
+
+                    float filteredX = Math.Abs(convertedX) < noiseThreshold ? 0 : convertedX;
+                    float filteredY = Math.Abs(convertedY) < noiseThreshold ? 0 : convertedY;
+                    float filteredZ = Math.Abs(convertedZ) < noiseThreshold ? 0 : convertedZ;
+
+                    rollingSums.x += filteredX;
+                    rollingSums.y += filteredY;
+                    rollingSums.z += filteredZ;
+
+                    double xAxisActionValue = Math.Abs(rollingSums.x) < baselineThreshold ? 0 : rollingSums.x;
+                    double yAxisActionValue = Math.Abs(rollingSums.y) < baselineThreshold ? 0 : rollingSums.y;
+                    double zAxisActionValue = Math.Abs(rollingSums.z) < baselineThreshold ? 0 : rollingSums.z;
+
+                    // For testing, let's just have this be an on/off. We can figure out scaling later, but for now let's use a fixed movement speed when this action is on
+
+                    // yAxisActionValue is negative when the user is looking down (Action1).
+                    float action1Value = yAxisActionValue >= 0 ? 0f : 1f;
+
+                    // yAxisActionValue is positive when the user is looking up (Action2)
+                    float action2Value = yAxisActionValue < 0 ? 0f : 1f;
+
+                    // zAxisActionValue is negative when the user is tilting their head left (Action3)
+                    float action3Value = zAxisActionValue >= 0 ? 0f : 1f;
+
+                    // zActionActionValue is positive when the user is tilting their head right (Action4)
+                    float action4Value = zAxisActionValue < 0 ? 0f : 1f;
+
+                    Console.WriteLine($"Action 1: {action1Value}. Action 2: {action2Value}. Action 3: {action3Value}. Action 4: {action4Value}.");
+
+                    motData.Add(action1Value);
+                    motData.Add(action2Value);
+                    motData.Add(action3Value);
+                    motData.Add(action4Value);
+
+                    break;
+                case GyrometerType.G:
+                case GyrometerType.Quaternion:
+                case GyrometerType.Unknown:
+                    Console.WriteLine($"Processing for {currentGyroType.ToString()} is not supported [ yet :) ]");
+                    break;
+                default: // *Should* never reach this case
+                    Console.WriteLine($"Undefined Gyrometer Type");
+                    break;
+            }
+
+            WriteDataToFile(motData);
+
         }
 
         // Convert G to a digestible form (Untested, provided by Emotiv)
