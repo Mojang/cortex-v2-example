@@ -159,7 +159,11 @@ namespace MotionLogger
 
         private static void OnMotionDataReceived(object sender, ArrayList motData)
         {
-            
+            double action1Value = 0f;
+            double action2Value = 0f;
+            double action3Value = 0f;
+            double action4Value = 0f;
+
             switch (currentGyroType)
             {
                 case GyrometerType.DPS:
@@ -186,16 +190,16 @@ namespace MotionLogger
                     // For testing, let's just have this be an on/off. We can figure out scaling later, but for now let's use a fixed movement speed when this action is on
 
                     // yAxisActionValue is negative when the user is looking down (Action1).
-                    float action1Value = yAxisActionValue >= 0 ? 0f : 1f;
+                    action1Value = yAxisActionValue >= 0 ? 0f : 1f;
 
                     // yAxisActionValue is positive when the user is looking up (Action2)
-                    float action2Value = yAxisActionValue < 0 ? 0f : 1f;
+                    action2Value = yAxisActionValue < 0 ? 0f : 1f;
 
                     // zAxisActionValue is negative when the user is tilting their head left (Action3)
-                    float action3Value = zAxisActionValue >= 0 ? 0f : 1f;
+                    action3Value = zAxisActionValue >= 0 ? 0f : 1f;
 
                     // zActionActionValue is positive when the user is tilting their head right (Action4)
-                    float action4Value = zAxisActionValue < 0 ? 0f : 1f;
+                    action4Value = zAxisActionValue < 0 ? 0f : 1f;
 
                     Console.WriteLine($"Action 1: {action1Value}. Action 2: {action2Value}. Action 3: {action3Value}. Action 4: {action4Value}.");
 
@@ -205,8 +209,35 @@ namespace MotionLogger
                     motData.Add(action4Value);
 
                     break;
+                case GyrometerType.Quaternion: // Note: data cleansing/validation not yet performed due to lack of headset, some of these values may be incorrectly assigned, but the logic should remain ~the same
+                    Quaternion q = new Quaternion
+                    {
+                        x = (double) motData[gyroXIndex],
+                        y = (double)motData[gyroYIndex],
+                        z = (double)motData[gyroZIndex],
+                        w = (double)motData[gyroWIndex],
+
+                    };
+                    EulerAngles ea = ConvertQuaternions(q);
+
+                    // pitch is negative when the user is looking down (Action1).
+                    action1Value = ea.pitch >= 0 ? 0f : ea.pitch;
+
+                    // pitch is positive when the user is looking up (Action2)
+                    action2Value = ea.pitch < 0 ? 0f : ea.pitch;
+
+                    // roll is negative when the user is tilting their head left (Action3)
+                    action3Value = ea.roll >= 0 ? 0f : ea.roll;
+
+                    // roll is positive when the user is tilting their head right (Action4)
+                    action4Value = ea.roll < 0 ? 0f : ea.roll;
+
+                    // yaw would be the equivilent of shaking your head 'no' for left and right, which could provide more inputs, but is less reliable
+
+                    Console.WriteLine($"Action 1: {action1Value}. Action 2: {action2Value}. Action 3: {action3Value}. Action 4: {action4Value}.");
+
+                    break;
                 case GyrometerType.G:
-                case GyrometerType.Quaternion:
                 case GyrometerType.Unknown:
                     Console.WriteLine($"Processing for {currentGyroType.ToString()} is not supported [ yet :) ]");
                     break;
